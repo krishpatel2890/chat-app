@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'public_key',
+        'public_key_alg',
     ];
 
     /**
@@ -125,8 +127,8 @@ class User extends Authenticatable
      */
     public function isFriendsWith($userId)
     {
-        $min = min($this->id, (int)$userId);
-        $max = max($this->id, (int)$userId);
+        $min = min($this->id, (int) $userId);
+        $max = max($this->id, (int) $userId);
 
         return Friendship::where('user_one', $min)->where('user_two', $max)->exists();
     }
@@ -162,4 +164,14 @@ class User extends Authenticatable
             $q->where('sender_id', $otherUserId)->where('receiver_id', $this->id);
         })->where('status', 'pending')->first();
     }
+
+    public function sentMessages()
+    {
+        return $this->hasMany(\App\Models\Message::class, 'sender_id');
+    }
+    public function receivedMessages()
+    {
+        return $this->hasMany(\App\Models\Message::class, 'receiver_id');
+    }
+
 }
