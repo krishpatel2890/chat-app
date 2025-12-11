@@ -10,24 +10,45 @@ use Illuminate\Support\Facades\Storage;
 
 class ChatController extends Controller
 {
+    // public function show(User $user)
+    // {
+    //     // supply friends/incoming/users as you had in your existing friends index
+    //     // $friends = auth()->user()->friends ?? collect();
+    //     $friends = auth()->user()->acceptedFriends(); // returns a Collection
+
+    //     $incoming = collect(); // adapt if you have incoming queries
+    //     $users = User::where('id', '!=', auth()->id())->get();
+
+    //     return view('chat.show', compact('user','friends','incoming','users'));
+    // }
     public function show(User $user)
     {
-        // supply friends/incoming/users as you had in your existing friends index
-        $friends = auth()->user()->friends ?? collect();
-        $incoming = collect(); // adapt if you have incoming queries
-        $users = User::where('id', '!=', auth()->id())->get();
+        $auth = auth()->user();
 
-        return view('chat.show', compact('user','friends','incoming','users'));
+        // Accepted friends list
+        $friends = $auth->acceptedFriends();
+
+        // Pending incoming friend requests (who sent request to me)
+        $incoming = $auth->receivedRequests()->with('sender')->get();
+
+        // Pending sent friend requests (I sent request to others)
+        $sent = $auth->sentRequests()->with('receiver')->get();
+
+        // All other users except me
+        $users = User::where('id', '!=', $auth->id)->get();
+
+        return view('chat.show', compact('user', 'friends', 'incoming', 'users', 'sent'));
     }
+
 
     public function messages(User $user)
     {
         $me = Auth::user();
 
-        $messages = Message::where(function($q) use ($me,$user){
-            $q->where('sender_id',$me->id)->where('receiver_id',$user->id);
-        })->orWhere(function($q) use ($me,$user){
-            $q->where('sender_id',$user->id)->where('receiver_id',$me->id);
+        $messages = Message::where(function ($q) use ($me, $user) {
+            $q->where('sender_id', $me->id)->where('receiver_id', $user->id);
+        })->orWhere(function ($q) use ($me, $user) {
+            $q->where('sender_id', $user->id)->where('receiver_id', $me->id);
         })->orderBy('created_at')->get();
 
         return response()->json($messages->load('sender'));

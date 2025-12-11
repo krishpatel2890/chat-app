@@ -101,7 +101,27 @@ class User extends Authenticatable
      *
      * @return \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection
      */
-    public function friends()
+
+
+
+    // public function friends()
+    // {
+    //     // get ids where this user is user_one
+    //     $one = Friendship::where('user_one', $this->id)->pluck('user_two')->toArray();
+
+    //     // get ids where this user is user_two
+    //     $two = Friendship::where('user_two', $this->id)->pluck('user_one')->toArray();
+
+    //     $ids = array_merge($one, $two);
+
+    //     if (empty($ids)) {
+    //         return collect([]);
+    //     }
+
+    //     return User::whereIn('id', $ids)->get();
+    // }
+
+    public function acceptedFriends()
     {
         // get ids where this user is user_one
         $one = Friendship::where('user_one', $this->id)->pluck('user_two')->toArray();
@@ -117,6 +137,8 @@ class User extends Authenticatable
 
         return User::whereIn('id', $ids)->get();
     }
+
+
 
     /**
      * Check if this user is friends with given user id.
