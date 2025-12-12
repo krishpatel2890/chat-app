@@ -15,35 +15,46 @@ class FriendController extends Controller
      */
     public function index()
     {
+        \Log::info('FriendController@index', [
+            'user_id' => auth()->id()
+        ]);
+
         $me = auth()->user();
 
-        // All other users (for Add Friend)
         $users = User::where('id', '!=', $me->id)->orderBy('name')->get();
 
-        // Incoming pending requests to me
         $incoming = FriendRequest::where('receiver_id', $me->id)
             ->where('status', 'pending')
             ->with('sender')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Sent requests by me (any status)
         $sent = FriendRequest::where('sender_id', $me->id)
             ->with('receiver')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Friends list (User collection)
-        $friends = $me->friends();
+        \Log::info('FriendController@index data', [
+            'incoming_count' => $incoming->count(),
+            'sent_count' => $sent->count()
+        ]);
+
+        $friends = $me->friends();  // You already fixed this alias
+
+        \Log::info('FriendController@index friends_count', [
+            'count' => $friends->count()
+        ]);
 
         return view('friends.index', compact('users','incoming','sent','friends'));
     }
 
-    /**
-     * Send friend request
-     */
     public function send(Request $request)
     {
+        \Log::info('FriendController@send', [
+            'sender_id' => auth()->id(),
+            'payload' => $request->all()
+        ]);
+
         $request->validate([
             'receiver_id' => 'required|integer|exists:users,id'
         ]);
@@ -52,15 +63,15 @@ class FriendController extends Controller
         $sender = auth()->id();
 
         if ($sender === $receiver) {
+            \Log::warning('FriendController@send attempted self-request');
             return response()->json(['error' => 'Cannot send request to yourself'], 422);
         }
 
-        // if already friends
         if (auth()->user()->isFriendsWith($receiver)) {
+            \Log::warning('FriendController@send already friends', ['receiver' => $receiver]);
             return response()->json(['error' => 'Already friends'], 422);
         }
 
-        // if a request exists in either direction
         $exists = FriendRequest::where(function($q) use ($sender, $receiver){
             $q->where('sender_id', $sender)->where('receiver_id', $receiver);
         })->orWhere(function($q) use ($sender, $receiver){
@@ -68,6 +79,7 @@ class FriendController extends Controller
         })->first();
 
         if ($exists) {
+            \Log::warning('FriendController@send request already exists');
             return response()->json(['error' => 'Request already exists or pending'], 422);
         }
 
@@ -77,14 +89,18 @@ class FriendController extends Controller
             'status' => 'pending'
         ]);
 
+        \Log::info('FriendController@send created', ['id' => $req->id]);
+
         return response()->json($req);
     }
 
-    /**
-     * Cancel a sent request (sender cancels)
-     */
     public function cancel(Request $request)
     {
+        \Log::info('FriendController@cancel', [
+            'sender_id' => auth()->id(),
+            'payload' => $request->all()
+        ]);
+
         $request->validate([
             'receiver_id' => 'required|integer|exists:users,id'
         ]);
@@ -94,67 +110,84 @@ class FriendController extends Controller
 
         $req = FriendRequest::where('sender_id', $sender)->where('receiver_id', $receiver)->first();
         if (!$req) {
+            \Log::warning('FriendController@cancel request_not_found');
             return response()->json(['error' => 'No request found to cancel'], 404);
         }
 
         $req->delete();
+
+        \Log::info('FriendController@cancel deleted');
+
         return response()->json(['success' => true]);
     }
 
-    /**
-     * Accept an incoming request (receiver accepts)
-     */
     public function accept(Request $request)
     {
+        \Log::info('FriendController@accept', [
+            'receiver_id' => auth()->id(),
+            'payload' => $request->all()
+        ]);
+
         $request->validate([
             'request_id' => 'required|integer|exists:friend_requests,id'
         ]);
 
-        $reqId = (int)$request->request_id;
-        $req = FriendRequest::find($reqId);
+        $req = FriendRequest::find($request->request_id);
+
         if (!$req || $req->receiver_id !== auth()->id()) {
+            \Log::warning('FriendController@accept invalid_request');
             return response()->json(['error' => 'Invalid request'], 403);
         }
 
-        // Create friendship pair (store min/max to keep unique index consistent)
         $a = min($req->sender_id, $req->receiver_id);
         $b = max($req->sender_id, $req->receiver_id);
 
         if (!Friendship::where('user_one', $a)->where('user_two', $b)->exists()) {
             Friendship::create(['user_one' => $a, 'user_two' => $b]);
+            \Log::info('FriendController@accept friendship_created');
         }
 
-        // Delete the friend request (we no longer need it)
         $req->delete();
+        \Log::info('FriendController@accept request_deleted');
 
         return response()->json(['success' => true]);
     }
 
-    /**
-     * Reject an incoming request (receiver rejects)
-     */
     public function reject(Request $request)
     {
+        \Log::info('FriendController@reject', [
+            'receiver_id' => auth()->id(),
+            'payload' => $request->all()
+        ]);
+
         $request->validate([
             'request_id' => 'required|integer|exists:friend_requests,id'
         ]);
 
-        $reqId = (int)$request->request_id;
-        $req = FriendRequest::find($reqId);
+        $req = FriendRequest::find($request->request_id);
         if (!$req || $req->receiver_id !== auth()->id()) {
+            \Log::warning('FriendController@reject invalid_request');
             return response()->json(['error' => 'Invalid request'], 403);
         }
 
         $req->delete();
+        \Log::info('FriendController@reject request_deleted');
+
         return response()->json(['success' => true]);
     }
 
-    /**
-     * Return friends list as JSON (optional helper)
-     */
     public function friendsList()
     {
+        \Log::info('FriendController@friendsList', [
+            'user_id' => auth()->id()
+        ]);
+
         $friends = auth()->user()->friends();
+
+        \Log::info('FriendController@friendsList count', [
+            'count' => $friends->count()
+        ]);
+
         return response()->json($friends);
     }
 }

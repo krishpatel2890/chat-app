@@ -10,31 +10,18 @@ use Illuminate\Support\Facades\Storage;
 
 class ChatController extends Controller
 {
-    // public function show(User $user)
-    // {
-    //     // supply friends/incoming/users as you had in your existing friends index
-    //     // $friends = auth()->user()->friends ?? collect();
-    //     $friends = auth()->user()->acceptedFriends(); // returns a Collection
-
-    //     $incoming = collect(); // adapt if you have incoming queries
-    //     $users = User::where('id', '!=', auth()->id())->get();
-
-    //     return view('chat.show', compact('user','friends','incoming','users'));
-    // }
     public function show(User $user)
     {
+        \Log::info('ChatController@show', [
+            'viewer_id' => auth()->id(),
+            'chat_with' => $user->id
+        ]);
+
         $auth = auth()->user();
 
-        // Accepted friends list
         $friends = $auth->acceptedFriends();
-
-        // Pending incoming friend requests (who sent request to me)
         $incoming = $auth->receivedRequests()->with('sender')->get();
-
-        // Pending sent friend requests (I sent request to others)
         $sent = $auth->sentRequests()->with('receiver')->get();
-
-        // All other users except me
         $users = User::where('id', '!=', $auth->id)->get();
 
         return view('chat.show', compact('user', 'friends', 'incoming', 'users', 'sent'));
@@ -45,36 +32,56 @@ class ChatController extends Controller
     {
         $me = Auth::user();
 
+        \Log::info('ChatController@messages fetch', [
+            'me' => $me->id,
+            'with' => $user->id
+        ]);
+
         $messages = Message::where(function ($q) use ($me, $user) {
             $q->where('sender_id', $me->id)->where('receiver_id', $user->id);
         })->orWhere(function ($q) use ($me, $user) {
             $q->where('sender_id', $user->id)->where('receiver_id', $me->id);
         })->orderBy('created_at')->get();
 
+        \Log::info('ChatController@messages count', [
+            'count' => $messages->count()
+        ]);
+
         return response()->json($messages->load('sender'));
     }
 
     public function send(Request $request)
     {
+        \Log::info('ChatController@send called', [
+            'sender_id' => auth()->id(),
+            'raw_payload' => $request->all()
+        ]);
+
         $request->validate([
             'receiver_id' => 'required|exists:users,id',
-            // body is ciphertext base64 (client-side encryption)
             'body' => 'nullable|string',
             'enc_algo' => 'nullable|string',
             'iv' => 'nullable|string',
             'tag' => 'nullable|string',
             'encrypted_keys' => 'required|json',
-            'attachment' => 'nullable|file|max:20480', // encrypted file blob
+            'attachment' => 'nullable|file|max:20480',
             'mime' => 'nullable|string',
             'meta' => 'nullable|json'
         ]);
+
+        \Log::info('ChatController@send validated');
 
         $me = Auth::user();
         $attachmentPath = null;
 
         if ($request->hasFile('attachment')) {
             $file = $request->file('attachment');
-            $attachmentPath = $file->store('messages', 'public'); // store encrypted blob
+            $attachmentPath = $file->store('messages', 'public');
+
+            \Log::info('ChatController@send attachment_saved', [
+                'path' => $attachmentPath,
+                'mime' => $request->mime
+            ]);
         }
 
         $msg = Message::create([
@@ -90,7 +97,9 @@ class ChatController extends Controller
             'meta' => $request->meta ? json_decode($request->meta, true) : null,
         ]);
 
-        // optionally broadcast event here (ciphertext only)
+        \Log::info('ChatController@send message_created', [
+            'message_id' => $msg->id
+        ]);
 
         return response()->json($msg->load('sender'));
     }

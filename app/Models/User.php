@@ -36,17 +36,15 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
+     * The attributes that should be cast.
      *
-     * @return array<string, string>
+     * @var array<string,string>
      */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
-    }
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        // If you're on Laravel 10+ this will auto-hash when setting password
+        'password' => 'hashed',
+    ];
 
     //
     // -----------------------------
@@ -101,26 +99,6 @@ class User extends Authenticatable
      *
      * @return \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection
      */
-
-
-
-    // public function friends()
-    // {
-    //     // get ids where this user is user_one
-    //     $one = Friendship::where('user_one', $this->id)->pluck('user_two')->toArray();
-
-    //     // get ids where this user is user_two
-    //     $two = Friendship::where('user_two', $this->id)->pluck('user_one')->toArray();
-
-    //     $ids = array_merge($one, $two);
-
-    //     if (empty($ids)) {
-    //         return collect([]);
-    //     }
-
-    //     return User::whereIn('id', $ids)->get();
-    // }
-
     public function acceptedFriends()
     {
         // get ids where this user is user_one
@@ -138,7 +116,16 @@ class User extends Authenticatable
         return User::whereIn('id', $ids)->get();
     }
 
-
+    /**
+     * Backwards-compatible alias for acceptedFriends().
+     * Some controllers/views may call $user->friends(); keep that working.
+     *
+     * @return \Illuminate\Support\Collection|\Illuminate\Database\Eloquent\Collection
+     */
+    public function friends()
+    {
+        return $this->acceptedFriends();
+    }
 
     /**
      * Check if this user is friends with given user id.
